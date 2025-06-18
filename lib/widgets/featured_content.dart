@@ -1,145 +1,198 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import '../models/movie.dart';
-import '../utils/app_theme.dart';
+import '../screens/movie/movie_video_player.dart';
+import '../screens/movie/movie_detail_screen.dart';
 
-class FeaturedContent extends StatelessWidget {
-  final Movie? movie;
+class FeaturedContent extends StatefulWidget {
+  final List<Movie> movies;
 
-  const FeaturedContent({Key? key, this.movie}) : super(key: key);
+  const FeaturedContent({Key? key, required this.movies}) : super(key: key);
+
+  @override
+  State<FeaturedContent> createState() => _FeaturedContentState();
+}
+
+class _FeaturedContentState extends State<FeaturedContent> {
+  late final PageController _pageController;
+  Timer? _timer;
+  int _currentPage = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _pageController = PageController();
+
+    if (widget.movies.length > 1) {
+      _startTimer();
+    }
+  }
+
+  void _startTimer() {
+    _timer = Timer.periodic(Duration(seconds: 5), (Timer timer) {
+      if (!mounted) return;
+      _currentPage = (_currentPage + 1) % widget.movies.length;
+
+      if (_pageController.hasClients) {
+        _pageController.animateToPage(
+          _currentPage,
+          duration: Duration(milliseconds: 800),
+          curve: Curves.easeInOut,
+        );
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    _pageController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
-    if (movie == null) {
-      return Container(
-        height: 500,
-        color: Colors.grey[900],
-        child: Center(
-          child: CircularProgressIndicator(),
-        ),
-      );
+    if (widget.movies.isEmpty) {
+      return Container(height: 500, color: Colors.black);
     }
-
-    return Container(
+    
+    return SizedBox(
       height: 500,
+      child: Stack(
+        alignment: Alignment.bottomCenter,
+        children: [
+          PageView.builder(
+            controller: _pageController,
+            itemCount: widget.movies.length,
+            onPageChanged: (int page) {
+              setState(() {
+                _currentPage = page;
+              });
+            },
+            itemBuilder: (context, index) {
+              final movie = widget.movies[index];
+              return _buildFeaturedItem(context, movie);
+            },
+          ),
+          Positioned(
+            bottom: 20,
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: List.generate(widget.movies.length, (index) {
+                return AnimatedContainer(
+                  duration: Duration(milliseconds: 300),
+                  margin: EdgeInsets.symmetric(horizontal: 4.0),
+                  height: 8.0,
+                  width: _currentPage == index ? 24.0 : 8.0,
+                  decoration: BoxDecoration(
+                    color: _currentPage == index ? Colors.white : Colors.grey.withOpacity(0.5),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                );
+              }),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildFeaturedItem(BuildContext context, Movie movie) {
+    return GestureDetector(
+      onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => MovieDetailScreen(movie: movie))),
       child: Stack(
         fit: StackFit.expand,
         children: [
-          // Background Image
           CachedNetworkImage(
-            imageUrl: movie!.fullBackdropPath,
+            imageUrl: movie.fullBackdropPath,
             fit: BoxFit.cover,
-            placeholder: (context, url) => Container(
-              color: Colors.grey[900],
-              child: Center(child: CircularProgressIndicator()),
-            ),
-            errorWidget: (context, url, error) => Container(
-              color: Colors.grey[900],
-              child: Icon(Icons.error, color: Colors.white),
-            ),
+            placeholder: (c, u) => Container(color: Colors.black),
+            errorWidget: (c, u, e) => Container(color: Colors.black),
           ),
-          
-          // Gradient Overlay
           Container(
-            decoration: BoxDecoration(
+            decoration: const BoxDecoration(
               gradient: LinearGradient(
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-                colors: [
-                  Colors.transparent,
-                  Colors.black.withOpacity(0.7),
-                  Colors.black,
-                ],
-                stops: [0.0, 0.7, 1.0],
+                colors: [Colors.black, Colors.transparent, Colors.black],
+                begin: Alignment.topCenter, end: Alignment.bottomCenter,
+                stops: [0.0, 0.5, 1.0],
               ),
             ),
           ),
-          
-          // Content
           Positioned(
-            bottom: 50,
             left: 20,
             right: 20,
+            bottom: 60,
             child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+              crossAxisAlignment: CrossAxisAlignment.center,
               children: [
-                // Title
                 Text(
-                  movie!.title,
+                  movie.title,
+                  textAlign: TextAlign.center,
                   style: TextStyle(
                     color: Colors.white,
-                    fontSize: 32,
+                    fontSize: 28,
                     fontWeight: FontWeight.bold,
+                    shadows: [Shadow(blurRadius: 10, color: Colors.black.withOpacity(0.7))],
                   ),
                 ),
-                SizedBox(height: 10),
-                
-                // Overview
+
+                // --- DESKRIPSI DITAMBAHKAN KEMBALI DI SINI ---
+                SizedBox(height: 12),
                 Text(
-                  movie!.overview,
-                  style: TextStyle(
-                    color: Colors.white70,
-                    fontSize: 14,
-                    height: 1.4,
-                  ),
+                  movie.overview,
+                  textAlign: TextAlign.center,
                   maxLines: 3,
                   overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: Colors.white.withOpacity(0.9),
+                    fontSize: 14,
+                    height: 1.4,
+                    shadows: [Shadow(blurRadius: 5, color: Colors.black.withOpacity(0.7))],
+                  ),
                 ),
                 SizedBox(height: 20),
-                
-                // Action Buttons
+                // ------------------------------------------
+
                 Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    Expanded(
-                      child: ElevatedButton.icon(
-                        onPressed: () {
-                          // Navigate to video player
-                        },
-                        icon: Icon(Icons.play_arrow, color: Colors.black),
-                        label: Text(
-                          'Play',
-                          style: TextStyle(
-                            color: Colors.black,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.white,
-                          padding: EdgeInsets.symmetric(vertical: 12),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(4),
-                          ),
-                        ),
+                    _buildActionButton(icon: Icons.add, label: 'My List', onTap: () {}),
+                    SizedBox(width: 20),
+                    ElevatedButton.icon(
+                      onPressed: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(builder: (_) => MovieVideoPlayer(movie: movie)),
+                        );
+                      },
+                      icon: Icon(Icons.play_arrow, color: Colors.black, size: 28),
+                      label: Text('Play', style: TextStyle(color: Colors.black, fontSize: 16, fontWeight: FontWeight.bold)),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.white,
+                        padding: EdgeInsets.symmetric(horizontal: 24, vertical: 12),
                       ),
                     ),
-                    SizedBox(width: 10),
-                    Expanded(
-                      child: ElevatedButton.icon(
-                        onPressed: () {
-                          // Add to my list
-                        },
-                        icon: Icon(Icons.add, color: Colors.white),
-                        label: Text(
-                          'My List',
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.grey[800],
-                          padding: EdgeInsets.symmetric(vertical: 12),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(4),
-                          ),
-                        ),
-                      ),
-                    ),
+                    SizedBox(width: 20),
+                    _buildActionButton(icon: Icons.info_outline, label: 'Info', onTap: () {}),
                   ],
                 ),
               ],
             ),
           ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildActionButton({required IconData icon, required String label, required VoidCallback onTap}) {
+    return InkWell(
+      onTap: onTap,
+      child: Column(
+        children: [
+          Icon(icon, color: Colors.white, size: 30),
+          SizedBox(height: 4),
+          Text(label, style: TextStyle(color: Colors.white, fontSize: 12)),
         ],
       ),
     );

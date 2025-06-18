@@ -1,30 +1,34 @@
 // This is a basic Flutter widget test.
-//
-// To perform an interaction with a widget in your test, use the WidgetTester
-// utility in the flutter_test package. For example, you can send tap and scroll
-// gestures. You can also use WidgetTester to find child widgets in the widget
-// tree, read text, and verify that the values of widget properties are correct.
+// We will test if the Login Screen renders correctly.
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-
-import 'package:netflix_mobile_application/main.dart';
+import 'package:netflix_mobile_application/main.dart'; // Import main.dart Anda
+import 'package:netflix_mobile_application/providers/movie_provider.dart'; // Import provider
+import 'package:provider/provider.dart';
 
 void main() {
-  testWidgets('Counter increments smoke test', (WidgetTester tester) async {
-    // Build our app and trigger a frame.
-    await tester.pumpWidget(MyApp());
+  // Nama tes diubah agar lebih deskriptif
+  testWidgets('Login screen smoke test', (WidgetTester tester) async {
+    // Langkah 1: Siapkan semua provider yang dibutuhkan oleh aplikasi Anda,
+    // sama seperti di main.dart.
+    await tester.pumpWidget(
+      MultiProvider(
+        providers: [
+          // MovieProvider dibutuhkan oleh beberapa halaman
+          ChangeNotifierProvider(create: (context) => MovieProvider()),
+        ],
+        // Langkah 2: Jalankan aplikasi kita dengan rute awal '/login' untuk tes ini.
+        child: const MyApp(initialRoute: '/login'),
+      ),
+    );
 
-    // Verify that our counter starts at 0.
-    expect(find.text('0'), findsOneWidget);
-    expect(find.text('1'), findsNothing);
+    // Langkah 3: Verifikasi.
+    // Kita berharap menemukan satu widget Teks yang berisi tulisan "Sign In"
+    // di halaman login. Ini membuktikan halaman tersebut berhasil dimuat.
+    expect(find.text('Sign In'), findsOneWidget);
 
-    // Tap the '+' icon and trigger a frame.
-    await tester.tap(find.byIcon(Icons.add));
-    await tester.pump();
-
-    // Verify that our counter has incremented.
-    expect(find.text('0'), findsNothing);
-    expect(find.text('1'), findsOneWidget);
+    // Kita juga bisa memverifikasi bahwa widget lain ada, misalnya field email.
+    expect(find.byType(TextFormField), findsNWidgets(2)); // Harapannya ada 2 TextFormField (email & password)
   });
 }

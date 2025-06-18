@@ -42,4 +42,14 @@ class ApiService {
       throw Exception('Error fetching details for movie $movieId: $e');
     }
   }
+
+   Future<List<Movie>> getUpcomingMovies() async {
+    final response = await http.get(Uri.parse('$_baseUrl/movie/upcoming?api_key=$_apiKey'));
+    if (response.statusCode == 200) {
+      final data = json.decode(response.body);
+      return (data['results'] as List).map((json) => Movie.fromJson(json)).toList();
+    } else {
+      throw Exception('Failed to load upcoming movies');
+    }
+  }
 }

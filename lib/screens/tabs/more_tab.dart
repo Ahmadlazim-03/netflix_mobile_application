@@ -1,5 +1,10 @@
 import 'package:flutter/material.dart';
-import '../../services/pocketbase_service.dart'; // Sesuaikan path jika perlu
+import 'package:netflix_mobile_application/screens/more/account_screen.dart';
+import 'package:netflix_mobile_application/screens/more/app_settings_screen.dart';
+import 'package:netflix_mobile_application/screens/more/help_screen.dart';
+import 'package:netflix_mobile_application/screens/more/my_list_screen.dart';
+import 'package:netflix_mobile_application/screens/more/notifications_screen.dart';
+import 'package:netflix_mobile_application/services/pocketbase_service.dart';
 
 class MoreTab extends StatefulWidget {
   const MoreTab({Key? key}) : super(key: key);
@@ -13,8 +18,7 @@ class _MoreTabState extends State<MoreTab> {
 
   String _userEmail = 'Loading...';
   String _userName = 'User';
-  Uri? _avatarUrl; 
-
+  Uri? _avatarUrl;
 
   @override
   void initState() {
@@ -29,7 +33,7 @@ class _MoreTabState extends State<MoreTab> {
         _userEmail = user.getStringValue('email');
         final nameFromData = user.getStringValue('name');
         _userName = nameFromData.isNotEmpty ? nameFromData : _userEmail.split('@').first;
-        _avatarUrl = _authService.getUserAvatarUrl(); 
+        _avatarUrl = _authService.getUserAvatarUrl();
       });
     } else {
       if (mounted) {
@@ -48,10 +52,7 @@ class _MoreTabState extends State<MoreTab> {
         return AlertDialog(
           backgroundColor: Colors.grey[900],
           title: Text('Sign Out', style: TextStyle(color: Colors.white)),
-          content: Text(
-            'Are you sure you want to sign out?',
-            style: TextStyle(color: Colors.white70),
-          ),
+          content: Text('Are you sure you want to sign out?', style: TextStyle(color: Colors.white70)),
           actions: [
             TextButton(
               onPressed: () => Navigator.of(dialogContext).pop(),
@@ -69,6 +70,34 @@ class _MoreTabState extends State<MoreTab> {
         );
       },
     );
+  }
+
+  // --- FUNGSI BARU UNTUK NAVIGASI ---
+  void _navigateToPage(String label) {
+    Widget page;
+    switch (label) {
+      case 'Account':
+        page = AccountScreen();
+        break;
+      case 'Notifications':
+        page = NotificationsScreen();
+        break;
+      case 'My List':
+        page = MyListScreen();
+        break;
+      case 'App Settings':
+        page = AppSettingsScreen();
+        break;
+      case 'Help':
+        page = HelpScreen();
+        break;
+      case 'Sign Out':
+        _showSignOutDialog(context);
+        return;
+      default:
+        return;
+    }
+    Navigator.push(context, MaterialPageRoute(builder: (context) => page));
   }
 
   @override
@@ -90,7 +119,7 @@ class _MoreTabState extends State<MoreTab> {
                   radius: 30,
                   backgroundColor: Colors.blue,
                   backgroundImage: _avatarUrl != null ? NetworkImage(_avatarUrl.toString()) : null,
-                  child: _avatarUrl == null 
+                  child: _avatarUrl == null
                       ? Text(
                           _userName.isNotEmpty ? _userName[0].toUpperCase() : 'U',
                           style: TextStyle(fontSize: 28, color: Colors.white, fontWeight: FontWeight.bold),
@@ -104,11 +133,7 @@ class _MoreTabState extends State<MoreTab> {
                     children: [
                       Text(
                         _userName,
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 20,
-                          fontWeight: FontWeight.bold,
-                        ),
+                        style: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold),
                         overflow: TextOverflow.ellipsis,
                       ),
                       SizedBox(height: 4),
@@ -136,12 +161,9 @@ class _MoreTabState extends State<MoreTab> {
             return ListTile(
               leading: Icon(item['icon'] as IconData, color: Colors.grey[400]),
               title: Text(item['label'] as String, style: TextStyle(color: Colors.white, fontSize: 16)),
-              trailing: Icon(Icons.chevron_right, color: Colors.grey[600]),
-              onTap: () {
-                if (item['label'] == 'Sign Out') {
-                  _showSignOutDialog(context);
-                }
-              },
+              trailing: item['label'] != 'Sign Out' ? Icon(Icons.chevron_right, color: Colors.grey[600]) : null,
+              // --- ONTAP SEKARANG MEMANGGIL FUNGSI NAVIGASI ---
+              onTap: () => _navigateToPage(item['label'] as String),
             );
           }).toList(),
         ],
