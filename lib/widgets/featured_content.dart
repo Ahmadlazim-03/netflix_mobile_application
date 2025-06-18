@@ -2,8 +2,9 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import '../models/movie.dart';
-import '../screens/movie/movie_video_player.dart';
 import '../screens/movie/movie_detail_screen.dart';
+import '../screens/movie/movie_video_player.dart';
+import '../services/pocketbase_service.dart';
 
 class FeaturedContent extends StatefulWidget {
   final List<Movie> movies;
@@ -19,6 +20,10 @@ class _FeaturedContentState extends State<FeaturedContent> {
   Timer? _timer;
   int _currentPage = 0;
 
+  final _pocketBaseService = PocketBaseService();
+  final Set<String> _myListMovieIds = {};
+  bool _isMyListLoading = true;
+
   @override
   void initState() {
     super.initState();
@@ -27,11 +32,14 @@ class _FeaturedContentState extends State<FeaturedContent> {
     if (widget.movies.length > 1) {
       _startTimer();
     }
+    _loadMyListStatus();
   }
 
   void _startTimer() {
     _timer = Timer.periodic(Duration(seconds: 5), (Timer timer) {
       if (!mounted) return;
+      
+      // Hitung halaman berikutnya, kembali ke 0 jika sudah di akhir
       _currentPage = (_currentPage + 1) % widget.movies.length;
 
       if (_pageController.hasClients) {
@@ -42,6 +50,56 @@ class _FeaturedContentState extends State<FeaturedContent> {
         );
       }
     });
+  }
+
+  Future<void> _loadMyListStatus() async {
+    if (!_pocketBaseService.isLoggedIn) {
+      if (mounted) setState(() => _isMyListLoading = false);
+      return;
+    }
+    final myList = await _pocketBaseService.getMyListMovies();
+    if (mounted) {
+      setState(() {
+        for (var movie in myList) {
+          _myListMovieIds.add(movie.id.toString());
+        }
+        _isMyListLoading = false;
+      });
+    }
+  }
+
+  Future<void> _handleMyListToggle(Movie movie) async {
+    if (_isMyListLoading || !_pocketBaseService.isLoggedIn) return;
+
+    final movieId = movie.id.toString();
+    final isInMyList = _myListMovieIds.contains(movieId);
+
+    setState(() {
+      if (isInMyList) {
+        _myListMovieIds.remove(movieId);
+      } else {
+        _myListMovieIds.add(movieId);
+      }
+    });
+
+    try {
+      if (isInMyList) {
+        await _pocketBaseService.removeFromMyList(movieId);
+      } else {
+        await _pocketBaseService.addToMyList(movieId);
+      }
+    } catch (e) {
+      // Jika gagal, kembalikan state UI ke semula
+      if(mounted) {
+        setState(() {
+          if (isInMyList) {
+            _myListMovieIds.add(movieId);
+          } else {
+            _myListMovieIds.remove(movieId);
+          }
+        });
+      }
+    }
   }
 
   @override
@@ -99,6 +157,8 @@ class _FeaturedContentState extends State<FeaturedContent> {
   }
 
   Widget _buildFeaturedItem(BuildContext context, Movie movie) {
+    final bool isInMyList = _myListMovieIds.contains(movie.id.toString());
+
     return GestureDetector(
       onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => MovieDetailScreen(movie: movie))),
       child: Stack(
@@ -124,7 +184,6 @@ class _FeaturedContentState extends State<FeaturedContent> {
             right: 20,
             bottom: 60,
             child: Column(
-              crossAxisAlignment: CrossAxisAlignment.center,
               children: [
                 Text(
                   movie.title,
@@ -136,8 +195,6 @@ class _FeaturedContentState extends State<FeaturedContent> {
                     shadows: [Shadow(blurRadius: 10, color: Colors.black.withOpacity(0.7))],
                   ),
                 ),
-
-                // --- DESKRIPSI DITAMBAHKAN KEMBALI DI SINI ---
                 SizedBox(height: 12),
                 Text(
                   movie.overview,
@@ -152,12 +209,14 @@ class _FeaturedContentState extends State<FeaturedContent> {
                   ),
                 ),
                 SizedBox(height: 20),
-                // ------------------------------------------
-
                 Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    _buildActionButton(icon: Icons.add, label: 'My List', onTap: () {}),
+                    _buildActionButton(
+                      icon: _isMyListLoading ? Icons.hourglass_empty : (isInMyList ? Icons.check : Icons.add),
+                      label: 'My List',
+                      onTap: () => _handleMyListToggle(movie),
+                    ),
                     SizedBox(width: 20),
                     ElevatedButton.icon(
                       onPressed: () {
@@ -174,7 +233,11 @@ class _FeaturedContentState extends State<FeaturedContent> {
                       ),
                     ),
                     SizedBox(width: 20),
-                    _buildActionButton(icon: Icons.info_outline, label: 'Info', onTap: () {}),
+                    _buildActionButton(
+                      icon: Icons.info_outline,
+                      label: 'Info',
+                      onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => MovieDetailScreen(movie: movie))),
+                    ),
                   ],
                 ),
               ],

@@ -3,7 +3,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:intl/intl.dart';
 import '../../../models/movie.dart';
 import '../../../services/api_service.dart';
-import '../../../services/pocketbase_service.dart'; // Import service PocketBase
+import '../../../services/pocketbase_service.dart';
 
 class ComingSoonTab extends StatefulWidget {
   const ComingSoonTab({Key? key}) : super(key: key);
@@ -15,47 +15,86 @@ class ComingSoonTab extends StatefulWidget {
 class _ComingSoonTabState extends State<ComingSoonTab> {
   late Future<List<Movie>> _upcomingMoviesFuture;
   final ApiService _apiService = ApiService();
+  final PocketBaseService _pocketBaseService = PocketBaseService();
 
-  // --- TAMBAHAN BARU UNTUK AVATAR ---
-  final _authService = PocketBaseService();
-  Uri? _avatarUrl;
-  String _userInitial = 'U';
-  // ------------------------------------
+  // State untuk melacak film mana saja yang sudah di-set reminder-nya
+  final Set<String> _remindedMovieIds = {};
+  bool _remindersLoading = true;
 
   @override
   void initState() {
     super.initState();
-    // Ambil data film yang akan datang
     _upcomingMoviesFuture = _apiService.getUpcomingMovies();
-    // Ambil juga data pengguna untuk avatar
-    _loadUserData();
+    _loadMyReminderStatus();
   }
 
-  // --- FUNGSI BARU UNTUK MENGAMBIL DATA AVATAR ---
-  void _loadUserData() {
-    if (_authService.isLoggedIn) {
-      final user = _authService.currentUser;
-      if (user != null && mounted) {
-        final userName = user.getStringValue('name').isNotEmpty 
-            ? user.getStringValue('name')
-            : user.getStringValue('email').split('@').first;
+  // Mengambil status reminder dari backend saat halaman dimuat
+  Future<void> _loadMyReminderStatus() async {
+    if (!_pocketBaseService.isLoggedIn) {
+      if (mounted) setState(() => _remindersLoading = false);
+      return;
+    }
+    final reminders = await _pocketBaseService.getMyReminders();
+    if (mounted) {
+      setState(() {
+        for (var record in reminders) {
+          _remindedMovieIds.add(record.getStringValue('movie_id'));
+        }
+        _remindersLoading = false;
+      });
+    }
+  }
 
+  // Fungsi untuk menambah/menghapus reminder
+  Future<void> _handleReminderToggle(Movie movie) async {
+    if (_remindersLoading) return;
+    if (!_pocketBaseService.isLoggedIn) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Please log in to set reminders.')));
+      return;
+    }
+
+    final movieId = movie.id.toString();
+    final isReminded = _remindedMovieIds.contains(movieId);
+    
+    // Update UI secara optimis untuk respons yang cepat
+    setState(() {
+      if (isReminded) {
+        _remindedMovieIds.remove(movieId);
+      } else {
+        _remindedMovieIds.add(movieId);
+      }
+    });
+
+    try {
+      if (isReminded) {
+        await _pocketBaseService.removeReminder(movieId);
+      } else {
+        await _pocketBaseService.addReminder(
+          movieId: movieId,
+          movieTitle: movie.title,
+          releaseDate: movie.releaseDate,
+        );
+      }
+    } catch (e) {
+      // Jika gagal, kembalikan UI ke state semula
+      if(mounted) {
         setState(() {
-          _avatarUrl = _authService.getUserAvatarUrl();
-          if (userName.isNotEmpty) {
-            _userInitial = userName[0].toUpperCase();
+          if (isReminded) {
+            _remindedMovieIds.add(movieId);
+          } else {
+            _remindedMovieIds.remove(movieId);
           }
         });
       }
     }
   }
-  // ---------------------------------------------
-
+  
   String _formatReleaseDate(String date) {
-    if (date.isEmpty) return 'TBA';
+    if (date.isEmpty) return 'Coming Soon';
     try {
       final dateTime = DateTime.parse(date);
-      return 'Coming ${DateFormat('EEEE, MMM d').format(dateTime)}'; // Contoh: "Coming Tuesday, Jun 19"
+      // Contoh: "Coming Thursday, Jun 19"
+      return 'Coming ${DateFormat('EEEE, MMM d').format(dateTime)}';
     } catch (_) {
       return 'Coming Soon';
     }
@@ -68,25 +107,6 @@ class _ComingSoonTabState extends State<ComingSoonTab> {
       appBar: AppBar(
         backgroundColor: Colors.black,
         title: Text('Coming Soon'),
-        actions: [
-          IconButton(onPressed: () {}, icon: Icon(Icons.cast)),
-          // --- APPBAR ACTION DIPERBARUI ---
-          Padding(
-            padding: const EdgeInsets.only(right: 12.0),
-            child: CircleAvatar(
-              radius: 15,
-              backgroundColor: Colors.blue,
-              backgroundImage: _avatarUrl != null ? NetworkImage(_avatarUrl.toString()) : null,
-              child: _avatarUrl == null
-                  ? Text(
-                      _userInitial,
-                      style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
-                    )
-                  : null,
-            ),
-          ),
-          // --------------------------------
-        ],
       ),
       body: FutureBuilder<List<Movie>>(
         future: _upcomingMoviesFuture,
@@ -94,8 +114,11 @@ class _ComingSoonTabState extends State<ComingSoonTab> {
           if (snapshot.connectionState == ConnectionState.waiting) {
             return Center(child: CircularProgressIndicator(color: Colors.red));
           }
-          if (snapshot.hasError || !snapshot.hasData || snapshot.data!.isEmpty) {
-            return Center(child: Text('Failed to load upcoming movies.', style: TextStyle(color: Colors.white)));
+          if (snapshot.hasError) {
+            return Center(child: Text('Failed to load data: ${snapshot.error}', style: TextStyle(color: Colors.white)));
+          }
+          if (!snapshot.hasData || snapshot.data!.isEmpty) {
+            return Center(child: Text('No upcoming movies found.', style: TextStyle(color: Colors.white)));
           }
 
           final movies = snapshot.data!;
@@ -112,6 +135,8 @@ class _ComingSoonTabState extends State<ComingSoonTab> {
   }
 
   Widget _buildComingSoonItem(Movie movie) {
+    final bool isReminded = _remindedMovieIds.contains(movie.id.toString());
+
     return Padding(
       padding: const EdgeInsets.only(bottom: 40.0),
       child: Column(
@@ -141,7 +166,7 @@ class _ComingSoonTabState extends State<ComingSoonTab> {
                       ),
                       SizedBox(height: 8),
                       Text(
-                        _formatReleaseDate(movie.releaseDate), // Menggunakan helper format tanggal
+                        _formatReleaseDate(movie.releaseDate),
                         style: TextStyle(color: Colors.white70, fontSize: 14),
                       ),
                       SizedBox(height: 8),
@@ -157,9 +182,20 @@ class _ComingSoonTabState extends State<ComingSoonTab> {
                 SizedBox(width: 20),
                 Column(
                   children: [
-                    _buildActionButton(icon: Icons.notifications_outlined, label: 'Remind Me'),
+                    _buildActionButton(
+                      icon: isReminded ? Icons.notifications_active : Icons.notifications_outlined,
+                      label: isReminded ? 'Reminder On' : 'Remind Me',
+                      onTap: () => _handleReminderToggle(movie),
+                      isActive: isReminded,
+                    ),
                     SizedBox(height: 24),
-                    _buildActionButton(icon: Icons.info_outline, label: 'Info'),
+                    _buildActionButton(
+                      icon: Icons.info_outline,
+                      label: 'Info',
+                      onTap: () {
+                        // Tambahkan navigasi ke halaman detail jika perlu
+                      },
+                    ),
                   ],
                 )
               ],
@@ -170,13 +206,22 @@ class _ComingSoonTabState extends State<ComingSoonTab> {
     );
   }
 
-  Widget _buildActionButton({required IconData icon, required String label}) {
-    return Column(
-      children: [
-        Icon(icon, color: Colors.white, size: 28),
-        SizedBox(height: 4),
-        Text(label, style: TextStyle(color: Colors.white70, fontSize: 10)),
-      ],
+  Widget _buildActionButton({
+    required IconData icon,
+    required String label,
+    required VoidCallback onTap,
+    bool isActive = false,
+  }) {
+    final color = isActive ? Colors.blueAccent : Colors.white;
+    return GestureDetector(
+      onTap: onTap,
+      child: Column(
+        children: [
+          Icon(icon, color: color, size: 28),
+          SizedBox(height: 4),
+          Text(label, style: TextStyle(color: isActive ? color : Colors.white70, fontSize: 10)),
+        ],
+      ),
     );
   }
 }

@@ -176,4 +176,100 @@ class PocketBaseService {
       return 'An unexpected error occurred: $e';
     }
   }
+
+  Future<bool> isInMyList(String movieId) async {
+    if (!isLoggedIn) return false;
+    final userId = currentUser!.id;
+    try {
+      await pb.collection('my_list').getFirstListItem('user = "$userId" && movie_id = "$movieId"');
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// Menambahkan film ke My List.
+  Future<void> addToMyList(String movieId) async {
+    if (!isLoggedIn) throw Exception('User not logged in.');
+    if (await isInMyList(movieId)) return; // Jangan tambahkan jika sudah ada
+
+    final body = <String, dynamic>{
+      "user": currentUser!.id,
+      "movie_id": movieId,
+    };
+    await pb.collection('my_list').create(body: body);
+  }
+
+  /// Menghapus film dari My List.
+  Future<void> removeFromMyList(String movieId) async {
+    if (!isLoggedIn) throw Exception('User not logged in.');
+    try {
+      final record = await pb.collection('my_list').getFirstListItem('user = "${currentUser!.id}" && movie_id = "$movieId"');
+      await pb.collection('my_list').delete(record.id);
+    } catch (e) {
+      // Abaikan jika record tidak ditemukan
+    }
+  }
+
+  /// Mengambil semua film yang ada di My List pengguna.
+  Future<List<Movie>> getMyListMovies() async {
+    if (!isLoggedIn) return [];
+    
+    final records = await pb.collection('my_list').getFullList(
+      filter: 'user = "${currentUser!.id}"',
+      sort: '-created',
+    );
+
+    if (records.isEmpty) return [];
+
+    final movieIds = records.map((record) => record.getStringValue('movie_id')).toList();
+    final movieFutures = movieIds.map((id) => _apiService.getMovieDetails(id)).toList();
+    
+    return await Future.wait(movieFutures);
+  }
+
+  Future<bool> hasReminder(String movieId) async {
+    if (!isLoggedIn) return false;
+    try {
+      await pb.collection('reminders').getFirstListItem('user = "${currentUser!.id}" && movie_id = "$movieId"');
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  Future<void> addReminder({
+    required String movieId,
+    required String movieTitle,
+    required String releaseDate,
+  }) async {
+    if (!isLoggedIn) throw Exception('User not logged in.');
+    if (await hasReminder(movieId)) return;
+
+    final body = <String, dynamic>{
+      "user": currentUser!.id,
+      "movie_id": movieId,
+      "movie_title": movieTitle,
+      "release_date": releaseDate,
+    };
+    await pb.collection('reminders').create(body: body);
+  }
+
+  Future<void> removeReminder(String movieId) async {
+    if (!isLoggedIn) throw Exception('User not logged in.');
+    try {
+      final record = await pb.collection('reminders').getFirstListItem('user = "${currentUser!.id}" && movie_id = "$movieId"');
+      await pb.collection('reminders').delete(record.id);
+    } catch (_) {
+      // Abaikan jika tidak ditemukan
+    }
+  }
+
+  Future<List<RecordModel>> getMyReminders() async {
+    if (!isLoggedIn) return [];
+    return await pb.collection('reminders').getFullList(
+      filter: 'user = "${currentUser!.id}"',
+      sort: 'release_date', // Urutkan berdasarkan tanggal rilis
+    );
+  }
 }
