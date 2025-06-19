@@ -23,7 +23,6 @@ class _MovieVideoPlayerState extends State<MovieVideoPlayer> {
   @override
   void initState() {
     super.initState();
-    // Paksa orientasi menjadi landscape untuk pengalaman menonton terbaik
     SystemChrome.setPreferredOrientations([
       DeviceOrientation.landscapeLeft,
       DeviceOrientation.landscapeRight,
@@ -41,17 +40,15 @@ class _MovieVideoPlayerState extends State<MovieVideoPlayer> {
             initialVideoId: trailerKey,
             flags: const YoutubePlayerFlags(
               autoPlay: true,
-              mute: false,
+              // --- PERBAIKAN DI SINI: Kembalikan ke TRUE untuk Windows ---
+              mute: true, 
               forceHD: true,
               loop: false,
-              // Sembunyikan UI YouTube yang berantakan
-              hideControls: false, 
-              controlsVisibleAtStart: false,
+              controlsVisibleAtStart: true, // Tampilkan kontrol di awal
             ),
           );
           setState(() => _isLoading = false);
         } else {
-          // Jika tidak ada trailer ditemukan
           setState(() {
             _isLoading = false;
             _errorMessage = 'Trailer for "${widget.movie.title}" not available.';
@@ -69,32 +66,42 @@ class _MovieVideoPlayerState extends State<MovieVideoPlayer> {
   }
 
   @override
+  void dispose() {
+    _controller?.dispose();
+    SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+    SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
-    return YoutubePlayerBuilder(
-      // On exit fullscreen, panggil Navigator.pop
-      onExitFullScreen: () => Navigator.pop(context),
-      player: YoutubePlayer(
-        controller: _controller ?? YoutubePlayerController(initialVideoId: ''),
-        // Sembunyikan player jika sedang loading atau error
-        showVideoProgressIndicator: !_isLoading && _errorMessage == null,
-        progressIndicatorColor: Colors.red,
-        progressColors: const ProgressBarColors(
-          playedColor: Colors.red,
-          handleColor: Colors.redAccent,
-        ),
+    return Scaffold(
+      backgroundColor: Colors.black,
+      body: Center(
+        child: _isLoading 
+          ? const CircularProgressIndicator(color: Colors.red)
+          : _errorMessage != null
+            ? _buildErrorWidget()
+            : YoutubePlayer(
+                controller: _controller!,
+                showVideoProgressIndicator: true,
+                progressIndicatorColor: Colors.red,
+                progressColors: const ProgressBarColors(
+                  playedColor: Colors.red,
+                  handleColor: Colors.redAccent,
+                ),
+                // Tombol kembali manual jika diperlukan
+                topActions: [
+                  const SizedBox(width: 8.0),
+                  IconButton(
+                    icon: const Icon(Icons.arrow_back_ios, color: Colors.white, size: 25.0),
+                    onPressed: () {
+                      Navigator.pop(context);
+                    },
+                  ),
+                ],
+              ),
       ),
-      builder: (context, player) {
-        return Scaffold(
-          backgroundColor: Colors.black,
-          body: Center(
-            child: _isLoading 
-              ? const CircularProgressIndicator(color: Colors.red)
-              : _errorMessage != null
-                ? _buildErrorWidget()
-                : player, // Tampilkan player jika sudah siap
-          ),
-        );
-      },
     );
   }
 
@@ -121,14 +128,5 @@ class _MovieVideoPlayerState extends State<MovieVideoPlayer> {
         ],
       ),
     );
-  }
-
-  @override
-  void dispose() {
-    _controller?.dispose();
-    // Mengembalikan UI system ke mode normal dan orientasi portrait saat keluar
-    SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
-    SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
-    super.dispose();
   }
 }

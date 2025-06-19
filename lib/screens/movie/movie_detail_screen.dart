@@ -6,6 +6,7 @@ import '../../models/movie.dart';
 import '../../providers/movie_provider.dart';
 import '../../services/movie_trailer_service.dart';
 import '../../services/pocketbase_service.dart';
+import '../../utils/app_theme.dart';
 import '../../widgets/content_row.dart';
 import 'movie_video_player.dart';
 
@@ -27,7 +28,7 @@ class _MovieDetailScreenState extends State<MovieDetailScreen> with SingleTicker
   // Instance Service
   final _pocketBaseService = PocketBaseService();
   final _trailerService = MovieTrailerService();
-
+  
   // State untuk tombol-tombol interaksi
   bool _isLiked = false;
   bool _isDisliked = false;
@@ -52,6 +53,7 @@ class _MovieDetailScreenState extends State<MovieDetailScreen> with SingleTicker
       CurvedAnimation(parent: _animationController, curve: Curves.easeInOut),
     );
 
+    // Memanggil fungsi pengecekan saat halaman dimuat
     _checkIfDownloaded();
     _checkMyListStatus();
   }
@@ -97,7 +99,7 @@ class _MovieDetailScreenState extends State<MovieDetailScreen> with SingleTicker
     }
 
     final originalState = _isInMyList;
-    setState(() => _isInMyList = !originalState);
+    setState(() => _isInMyList = !originalState); // Optimistic UI update
 
     try {
       if (originalState) {
@@ -108,7 +110,7 @@ class _MovieDetailScreenState extends State<MovieDetailScreen> with SingleTicker
         _showSnackBar('Added to My List');
       }
     } catch (e) {
-      setState(() => _isInMyList = originalState);
+      setState(() => _isInMyList = originalState); // Revert on error
       _showSnackBar('An error occurred. Please try again.', isError: true);
     }
   }
@@ -134,12 +136,14 @@ class _MovieDetailScreenState extends State<MovieDetailScreen> with SingleTicker
     }
     setState(() {
       _isDownloading = true;
-      _downloadProgress = 0;
+      _downloadProgress = 0.0;
     });
 
     try {
       final trailerKey = await _trailerService.getBestTrailerKey(widget.movie.id);
-      if (trailerKey == null) throw Exception('No trailer found for this movie.');
+      if (trailerKey == null) {
+        throw Exception('No trailer found for this movie.');
+      }
 
       await _pocketBaseService.addMovieToDownloads(
         movieId: widget.movie.id.toString(),
@@ -154,12 +158,18 @@ class _MovieDetailScreenState extends State<MovieDetailScreen> with SingleTicker
       );
       if (mounted) {
         _showSnackBar('Movie downloaded successfully!');
-        setState(() => _isDownloaded = true);
+        setState(() {
+          _isDownloaded = true;
+        });
       }
     } catch (e) {
-      if (mounted) _showSnackBar(e.toString().replaceFirst("Exception: ", ""));
+      if (mounted) {
+        _showSnackBar(e.toString().replaceFirst("Exception: ", ""));
+      }
     } finally {
-      if (mounted) setState(() => _isDownloading = false);
+      if (mounted) {
+        setState(() => _isDownloading = false);
+      }
     }
   }
   
